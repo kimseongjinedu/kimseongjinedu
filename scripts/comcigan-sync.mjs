@@ -19,6 +19,7 @@ const DEFAULT_NAME = '창원대산고등학교';
 const ORIGIN_HOST = 'comci.net';
 const ORIGIN_PORT = 4082;
 const KEEP_WEEKS = 12; // weeks kept in the doc (newest first), keeps it well under the 256 KiB doc limit
+const MAX_CLASSES = 7; // 1~7반만 씀. 8반부터는 특별반이라 앱에서 쓰지 않음
 
 // ---------- args ----------
 function parseArgs(argv) {
@@ -168,7 +169,7 @@ export function gradeRows(data, keys, grade, useOriginal) {
 export function classCount(data, grade) {
   const all = Number(data.학급수?.[grade]) || 0;
   const virt = Number(data.가상학급수?.[grade]) || 0;
-  return Math.max(0, all - virt);
+  return Math.min(MAX_CLASSES, Math.max(0, all - virt));
 }
 
 function hm(s) { const m = String(s || '').match(/(\d{1,2}):(\d{2})/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; }

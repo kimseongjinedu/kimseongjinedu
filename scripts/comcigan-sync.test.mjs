@@ -1,7 +1,7 @@
 // node --test scripts/*.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { discover, decodeCell, gradeRows, mergeWeeks, teacherName } from './comcigan-sync.mjs';
+import { canonical, classCount, discover, decodeCell, gradeRows, mergeWeeks, teacherName } from './comcigan-sync.mjs';
 
 const keys = { route: '36179', prefix: '73629_', daily: '147', original: '481', teacher: '446', subject: '492' };
 
@@ -54,6 +54,15 @@ test('changed cells are listed as grade-class-day-period', () => {
 test('fresh weeks replace stored ones and the list stays sorted', () => {
   const merged = mergeWeeks([{ start: '2026-10-12', v: 'old' }, { start: '2026-10-19', v: 'old' }], [{ start: '2026-10-19', v: 'new' }, { start: '2026-10-26', v: 'new' }]);
   assert.deepEqual(merged.map((w) => w.start + ':' + w.v), ['2026-10-12:old', '2026-10-19:new', '2026-10-26:new']);
+});
+
+test('only classes 1-7 are kept', () => {
+  assert.equal(classCount({ 학급수: [31, 9, 10, 12], 가상학급수: [0, 0, 0, 0] }, 3), 7);
+  assert.equal(classCount({ 학급수: [5, 5, 0, 0], 가상학급수: [0, 1, 0, 0] }, 1), 4);
+});
+
+test('canonical JSON ignores key order', () => {
+  assert.equal(canonical({ b: 1, a: [{ d: 2, c: 3 }] }), canonical({ a: [{ c: 3, d: 2 }], b: 1 }));
 });
 
 test('discovers route and data keys from the student page', () => {
