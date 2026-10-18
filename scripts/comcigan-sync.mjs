@@ -202,6 +202,13 @@ export function mergeWeeks(prevWeeks, freshWeeks) {
   return [...by.values()].sort((a, b) => (a.start < b.start ? -1 : 1)).slice(-KEEP_WEEKS);
 }
 
+// JSON with object keys sorted, so two docs compare equal whatever order their keys came in.
+export function canonical(v) {
+  if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}';
+  return JSON.stringify(v);
+}
+
 // ---------- main ----------
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -251,8 +258,8 @@ async function main() {
     weeks: mergeWeeks(prev && prev.weeks, fresh)
   };
 
-  // Did anything other than checkedAt change since the previous doc?
-  const strip = (d) => JSON.stringify(Object.assign({}, d, { checkedAt: '' }));
+  // Did anything other than checkedAt change since the previous doc? (the db may return keys in another order)
+  const strip = (d) => canonical(Object.assign({}, d, { checkedAt: '' }));
   const changed = !prev || strip(prev) !== strip(doc);
 
   const json = JSON.stringify(doc);
