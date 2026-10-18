@@ -26,11 +26,11 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 
 ```js
 // 계획
-{ id, title(≤60), deadline:'YYYY-MM-DD', time:'' /*항상 빈 값*/, importance:'high'|'normal'|'low',
+{ id, title(≤60), deadline:'YYYY-MM-DD'|'' /*''=마감 기한 없음*/, time:'' /*항상 빈 값*/, importance:'high'|'normal'|'low',
   memo(≤1000), supplies:[문자열 ≤10개], duration(분, 0=미입력→60분으로 계산),
-  repeatType:'none'|'day'|'week', repeatEvery, repeatDays:[0-6], repeatCount, startDate,
+  repeatType:'none', repeatEvery:1, repeatDays:[], repeatCount:0 /*반복 규칙은 없앴다. clean()이 항상 none으로 만든다*/, startDate,
   files:[{id,name,type,size}], done, createdAt }
-// 시간표 블록 (date가 null이면 '배치되지 않은 블록')
+// 시간표 블록 (date가 null이면 '배치되지 않은 블록'의 카드)
 { id, itemId, title, importance, date:'YYYY-MM-DD'|null, start:분|null, dur:분 }
 // 수업 준비물 저장 형식
 { occ:[{ d:'YYYY-MM-DD', p:교시index, items:[] }], subj:[{ s:과목키, items:[] }] }
@@ -42,6 +42,15 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 - `ALL_SCHOOL_EVENTS`: `[시작, 끝, 이름, kind, grades?]`. kind는 `exam|holiday|vacation|event|trip`이다. `applyGradeEvents()`가 고른 학년의 일정만 `SCHOOL_EVENTS`와 `schoolByDay`에 채운다.
 - 시간표·학사일정 범위: 2026-10-01 ~ 2026-12-31(`TT_FROM`, `TT_TO`, `CLASS_FROM`, `CLASS_TO`).
 - `PERIODS`: 1교시 08:40부터 50분 수업, 10분 쉬는 시간. `LUNCH`: 12:30~13:30.
+
+### 반복하는 날 = 시간표에 놓은 날 (2026-10-18 바뀜)
+- 계획에는 반복 설정이 없다(편집 화면에서 뺐다). 계획의 블록이 시간표에 놓인 날과 시각이 그 계획의 "반복하는 날"이다. `placedByItem()`/`placedOf(id)`(ttState.blocks 배열이 바뀔 때마다 다시 계산)로 구한다.
+- 목록: 2번 이상 놓였으면 "반복 N회 · 시간표에 놓은 날" + 칩(`placeChips`, "10/21 수 17:00", 지난 것 흐리게, 다음 것 강조, 마감 뒤는 점선). 1번이면 "시간표 10월 21일(수) 17:00~18:00". 캘린더의 반복 표시와 날짜 칸(반복 n/total, 시각)도 같은 자료를 쓴다.
+- 마감 기한은 선택이다. 비우면 `deadline:''`, 목록에 "마감 기한 없음", D-day 없음, 정렬은 맨 뒤(`dueKey`). 끝 날짜가 없는 명령은 12월 31일까지만 한다.
+- '배치되지 않은 블록'의 카드는 틀이다. 시간표에 놓으면(끌기, 또는 카드를 누르고 빈 칸 누르기) 복사본이 놓이고 카드는 남는다(`placeCopy`). 누른 채로 여러 날을 누를 수 있다. 시간표의 블록을 빼면(트레이로 끌기, 배치 빼기, Delete) 같은 계획의 카드가 이미 있을 때는 지우고, 없으면 카드가 된다(`unplaceBlock`).
+- 카드(트레이 또는 시간표)를 누른 상태에서는 트레이 머리의 "모두 지우기"가 쓰레기통이 되고, 누르면 그 카드만 지운다(`syncTrayClear`).
+- 편집 화면: 취소 버튼은 위쪽(`.ed-top`), 저장 버튼은 아래쪽. 목록·캘린더·시간표 탭을 바꾸거나 휴대폰에서 SchoolMate AI 탭으로 가면 편집 화면이 닫힌다(`setPageView`, `setView`).
+- 중복·겹침 알림은 모두 껐다(사용자 요청): 겹침 막대, '겹침' 표시, "겹치는 일정이 있어요" 토스트, 채팅 안내, 학교 시간표가 바뀌었다는 토스트. `renderList`에서 `groups = []`. '중복 계획 정리' 명령은 그대로 된다.
 
 ## 3. 학교 시간표 규칙 (`classBlocksFor(k)`)
 - 수요일 5·6교시: 동아리활동, 또는 그날 학사일정의 활동(`wedActivity`).
@@ -62,6 +71,7 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 3. "N일 시간표" 조회
 4. 준비물 설정(`supplyIntent` → `runSupplyCommand`)
 5. 준비물 질문
+5-1. 반복 배치(`REPEAT_WORD` → `repeatTargets` → `runRepeatPlace`/`repeatPlan`): "2일마다 11월 30일까지 5시부터 선택한 계획 추가해 줘". 대상은 같은 메시지에서 만든 계획 → 체크한 계획(없으면 시간표에서 누른 카드의 계획) → '모든 계획' → 이름이 나온 계획 순. 대상이 없으면 아래로 내려가 계획을 만들고, `deliver()` 끝에서 새 계획을 같은 말대로 배치한다. 날짜는 오늘(시각이 지났으면 내일, '부터' 날짜가 있으면 그날)부터 '까지' 날짜, 없으면 계획 마감, 없으면 12/31까지. 오전·오후 없이 1~11시이고 16:30 전이면 오후로 읽는다. 시각이 없으면 수업 끝난 뒤(`openStart`). 그날 같은 계획 블록은 새 것으로 바꾼다. 블록은 400개까지.
 6. 선택 명령(완료 전환, 삭제, 배치되지 않은 블록 넣기 ×N)
 7. `trayIntent`(이름·방금 만든 계획·선택한 계획 순으로 대상을 고른다)
 8. 이름으로 완료·삭제
@@ -70,9 +80,11 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 11. `ttIntent`: create면 `handleTimetable`, edit면 `handleTTEdit`
 12. AI(`askAI`) 또는 `localRespond`
 
-`chat.ctx = { created:[], lastAdded:[], defaultDue }`는 한 메시지 안에서 만든 계획을 기억한다. 여러 단계를 시키면 마감이 없는 계획은 일주일 뒤로 잡는다.
+`chat.ctx = { created:[], lastAdded:[], multi }`는 한 메시지 안에서 만든 계획을 기억한다. 마감을 말하지 않은 계획은 "추가/만들" 같은 말이 있거나 여러 단계 명령이면 마감 기한 없이 만든다. 그런 말 없이 이름만 말하면 "언제까지 할까요? 없으면 ‘없어’"라고 묻는다.
 
 시간표 배치:
+- 시간표 단어가 없어도 "5시부터 선택한 계획 추가해 줘"처럼 선택·시각·추가가 있으면 그날 시간표 만들기로 본다(`ttIntent`).
+- `applyTTResult`는 트레이 카드를 지우지 않는다. 범위가 있으면 그날의 같은 계획 블록만 바꾸고, 못 놓은 계획은 카드가 없을 때만 카드로 만든다.
 - `parseTTRequest(text)`는 `{ date, start, end, mode }`를 돌려준다. mode는 `'from'`("7시부터"), `'until'`("9시까지"), `''`(범위)다.
 - `openStart(k)`는 지금 시각과 수업 끝 시각 중 늦은 쪽을 시작으로 잡는다.
 - 오전·오후가 없으면 이미 지난 시각이나 수업 시간일 때 오후로 읽는다.
@@ -91,9 +103,14 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 | 수학, 내일까지, 중요, 시간표 만들기 | 계획 1개(중요도 높음), 블록 1개 |
 | 수학, 내일, 시간표 / 수학 내일 시간표 | 계획 1개, 블록 1개 |
 | 수학, 영어, 내일까지, 시간표 2개 추가 | 계획 2개, 블록 4개 |
-| 수학 숙제랑 영어 단어 계획 만들고 시간표 2개씩 추가해 줘 | 계획 2개, 블록 4개 |
+| 수학 숙제랑 영어 단어 계획 만들고 시간표 2개씩 추가해 줘 | 계획 2개(마감 기한 없음), 블록 4개 |
 | 국어 독후감, 금요일까지, 시간표 만들기, 오늘 뭐부터 할까? | 계획, 블록, 우선순위 답변 순서 |
-| 영어 단어 암기, 이달 말까지, 이틀마다, 30분 걸려 추가해 줘 | 계획 1개(쪼개지면 안 됨) |
+| 영어 단어 암기, 이달 말까지, 이틀마다, 30분 걸려 추가해 줘 | 계획 1개(쪼개지면 안 됨) + 이달 말까지 이틀마다 수업 끝난 뒤 블록 |
+| 2일마다 11월 30일까지 5시부터 선택한 계획 추가해줘 | 고른 계획을 오늘부터 11/30까지 2일마다 17:00에 배치 |
+| 매일 9시부터 선택한 계획 추가해줘(마감 없는 계획) | 12/31까지 매일 21:00 |
+| 5시부터 선택한 계획 추가해줘 | 오늘 17:00에 배치 |
+| 수학 숙제 추가해 줘 | 마감 기한 없는 계획 1개 |
+| 수학 숙제 → 없어 | 언제까지 묻고, ‘없어’면 마감 기한 없이 추가 |
 | 과학 보고서를 할까? 수학 숙제를 할까? | 우선순위 답변(쪼개지면 안 됨) |
 | 선택한 계획으로 시간표 7시부터 만들어줘 | 19:00부터 배치 |
 | 선택한 계획으로 시간표 9시까지 만들어줘 | 수업 끝 뒤부터 21:00 전까지 배치 |
