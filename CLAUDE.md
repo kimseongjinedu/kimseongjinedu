@@ -11,7 +11,7 @@
 
 | 이름 | 용도 |
 |---|---|
-| `db` | 로그인 사용자별 저장. `data/users/<uid>/planner/schedules`(계획), `data/users/<uid>/timetable`(블록·반·학년), `data/users/<uid>/supplies`(수업 준비물). 공유 문서 `school/timetable`(컴시간 시간표, 평일 수업 시간마다·일요일 아침 갱신, 편집자 이상만 쓰기) |
+| `db` | 로그인 사용자별 저장. `data/users/<uid>/planner/schedules`(계획), `data/users/<uid>/timetable`(블록·반·학년), `data/users/<uid>/supplies`(수업 준비물). 공유 문서 `school/timetable`(컴시간 시간표, 평일 수업 시간마다·일요일 저녁 갱신, 편집자 이상만 쓰기) |
 | `sample` | AI 호출. `ai.fn.json(prompt, { modelTier: 'quick' \| 'default' })` |
 | `assets` | 첨부 파일. `/_blob/<id>`로 제공 |
 | `permissions`, `user`, `downloads` | AI 허용 상태, 사용자 id, 파일 내려받기 |
@@ -122,7 +122,7 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 학교 시간표는 컴시간알리미(http://컴시간학생.kr → `comci.net:4082`, 학교 코드 31720)에서 학교 일과에 맞춰 받아 온다. 아티팩트는 외부 사이트를 직접 읽지 못해서 이렇게 나눴다.
 
 - `scripts/comcigan-sync.mjs`: 컴시간 학생 페이지(`/st`)에서 경로 번호와 `자료NNN` 키를 찾아 읽고(컴시간이 가끔 바꾼다), 1~3학년 1~7반의 이번 주·다음 주 시간표(바뀐 수업 포함)와 기본 시간표를 문서 하나로 만든다. Node 내장 모듈만 쓴다. `HTTPS_PROXY`가 있으면 CONNECT로 터널을 연다. 테스트: `node --test scripts/*.test.mjs`
-- 루틴 4개, 사용자가 정한 일정(한국 시간): 평일 1교시 25분 전 8:15(`trig_01LJtTmJQseAeuQBaR8wdDEX`), 1~4교시 시작 25분 뒤 9:05~12:05(`trig_013cQqMfekoVrKmmLWYTRPdz`), 5~7교시 시작 25분 뒤 13:55~15:55(`trig_01144D4jyTbbyf3kKQWPeohC`), 일요일 7:51(`trig_01193kz3vpEA8RC5Sc1SYH9H`, 8시 정각은 늦게 시작할 수 있어 조금 당김). 모두 실행마다 새 세션, 알림 끔, 프롬프트 같음. 교시 시각이 바뀌면 이 일정과 페이지의 `SYNC_WEEKDAY`·`SYNC_SUNDAY`를 함께 고친다. 하는 일: 아티팩트에 함께 올린 `comcigan-sync.mjs`를 내려받아 실행하고, 결과를 `school/timetable`에 `if_version`을 걸어 쓴다. **스크립트를 고치면 아티팩트의 `comcigan-sync.mjs`도 다시 올려야 루틴에 반영된다**(루틴은 GitHub을 쓰지 않는다).
+- 루틴 4개, 사용자가 정한 일정(한국 시간): 평일 1교시 25분 전 8:15(`trig_01LJtTmJQseAeuQBaR8wdDEX`), 1~4교시 시작 25분 뒤 9:05~12:05(`trig_013cQqMfekoVrKmmLWYTRPdz`), 5~7교시 시작 25분 뒤 13:55~15:55(`trig_01144D4jyTbbyf3kKQWPeohC`), 일요일 19:51(`trig_01193kz3vpEA8RC5Sc1SYH9H`, 사용자 요청은 오후 8시. 정각은 늦게 시작할 수 있어 조금 당김). 모두 실행마다 새 세션, 알림 끔, 프롬프트 같음. 교시 시각이 바뀌면 이 일정과 페이지의 `SYNC_WEEKDAY`·`SYNC_SUNDAY`를 함께 고친다. 하는 일: 아티팩트에 함께 올린 `comcigan-sync.mjs`를 내려받아 실행하고, 결과를 `school/timetable`에 `if_version`을 걸어 쓴다. **스크립트를 고치면 아티팩트의 `comcigan-sync.mjs`도 다시 올려야 루틴에 반영된다**(루틴은 GitHub을 쓰지 않는다).
 - 문서 형식(`school/timetable`): `{ v:1, checkedAt, sourceUpdated, classes:{1:7,2:7,3:7}, times, base:{from, g}, weeks:[{start, g, changed}] }`. `g[학년]`은 문자열 40개(`요일*8 + 교시`, 월=0), 각 문자열은 `과목 교사|…`(1반부터). `changed`는 `'학년-반-요일(월=1)-교시(1부터)'`. 지난 주는 최근 12주까지 남긴다.
 - db 규칙: `{ path: 'school', read: 'view', write: 'admin' }`. 아티팩트를 다시 올릴 때 `capabilities`를 넘기면 이 규칙을 꼭 다시 적는다(빠뜨리면 사라진다).
 - 페이지 쪽: `initLive()`가 `school/timetable`을 구독한다. `readLive`/`setLive`가 검사·적용하고, `gradeTT(g, k)`는 그 주 자료가 있으면 그 주 것, 없으면 `base`, 그것도 없으면 `G*_TT`를 쓴다. `classRows(n, k)`는 날짜 `k`의 주에 맞춘다. 바뀐 수업은 `isChangedClass`로 ‘변경’ 표시, `renderTTSrc()`가 "마지막 확인" 시각을 보여 준다. `lastSyncSlot()`으로 가장 최근 예정 시각을 구해, 그 뒤 20분이 지났는데 자료가 그보다 오래됐으면 빨간색 "확인이 늦어지고 있어요"를 띄운다. 반 고르기 목록은 `buildClassSel()`이 만든다(`CLASS_LIMIT = 7`).
