@@ -3,7 +3,9 @@
 SchoolMate AI 앱의 학교 시간표를 [컴시간알리미](http://컴시간학생.kr)(창원대산고등학교, 학교 코드 31720)에서 매시간 받아 옵니다.
 
 - `comcigan-sync.mjs`: 모든 학년·모든 반(1학년 9반, 2학년 10반, 3학년 12반)의 이번 주·다음 주 시간표와 기본 시간표를 받아 JSON 문서 하나로 만듭니다. Node 18 이상, 외부 패키지 없음.
-- 매시간 Claude 루틴이 이 스크립트를 실행하고 결과를 앱의 공유 데이터베이스 문서 `school/timetable`에 씁니다. 앱은 이 문서를 실시간으로 읽어 시간표 탭, 준비물 창, SchoolMate AI 답변에 반영합니다.
+- 매시간 Claude 루틴(‘SchoolMate AI 시간표 매시간 동기화 (컴시간)’, 매시 3분)이 이 스크립트를 실행하고 결과를 앱의 공유 데이터베이스 문서 `school/timetable`에 씁니다. 앱은 이 문서를 실시간으로 읽어 시간표 탭, 준비물 창, SchoolMate AI 답변에 반영합니다.
+- 루틴은 GitHub이 아니라 아티팩트에 함께 올린 사본(`comcigan-sync.mjs`)을 내려받아 실행합니다. 스크립트를 고치면 아티팩트에도 다시 올려야 루틴에 반영됩니다.
+- `school/timetable`은 편집자(관리자) 이상만 쓸 수 있고, 링크가 있는 사람은 모두 읽을 수 있습니다.
 
 ```sh
 node scripts/comcigan-sync.mjs --out /tmp/tt.json --prev /tmp/prev.json
