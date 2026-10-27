@@ -42,22 +42,20 @@ jobs:
         run: node --test scripts/*.test.mjs
       - name: Build app
         run: node scripts/build-app.mjs --out _site
-      - id: pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Timetable from 컴시간알리미
-        env:
-          BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           # the last published copy keeps the past weeks (comcigan-sync.mjs merges them)
-          curl -fsS --max-time 20 "$BASE_URL/timetable.json?t=$(date +%s)" -o prev.json || echo '{}' > prev.json
+          owner="${GITHUB_REPOSITORY%%/*}"
+          base="https://${owner,,}.github.io/${GITHUB_REPOSITORY#*/}"
+          curl -fsS --max-time 20 "$base/timetable.json?t=$(date +%s)" -o prev.json || echo '{}' > prev.json
           if node scripts/comcigan-sync.mjs --out _site/timetable.json --prev prev.json; then
             echo "컴시간알리미에서 새로 받았어요"
           else
             echo "::warning::컴시간알리미에서 받지 못해 지난 시간표를 그대로 올려요"
             cp prev.json _site/timetable.json
           fi
+      # needs Settings → Pages → Source: GitHub Actions (the workflow token cannot switch Pages on)
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
