@@ -1,0 +1,65 @@
+# SchoolMate AI 앱(GitHub Pages)을 만들어 올리고, 컴시간알리미 시간표를 timetable.json으로 함께 올린다.
+# 시각은 claude.ai 루틴과 같다(한국 시간 = UTC+9): 평일 8:15, 1~7교시 시작 25분 뒤, 일요일 19:51.
+name: SchoolMate app
+
+on:
+  push:
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - '.github/workflows/app.yml'
+  schedule:
+    - cron: '15 23 * * 0-4'   # 월~금 08:15
+    - cron: '5 0-3 * * 1-5'   # 월~금 09:05, 10:05, 11:05, 12:05
+    - cron: '55 4-6 * * 1-5'  # 월~금 13:55, 14:55, 15:55
+    - cron: '51 10 * * 0'     # 일 19:51
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Pages deploys from the default branch only
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test scripts
+        run: node --test scripts/*.test.mjs
+      - name: Build app
+        run: node scripts/build-app.mjs --out _site
+      - id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Timetable from 컴시간알리미
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          # the last published copy keeps the past weeks (comcigan-sync.mjs merges them)
+          curl -fsS --max-time 20 "$BASE_URL/timetable.json?t=$(date +%s)" -o prev.json || echo '{}' > prev.json
+          if node scripts/comcigan-sync.mjs --out _site/timetable.json --prev prev.json; then
+            echo "컴시간알리미에서 새로 받았어요"
+          else
+            echo "::warning::컴시간알리미에서 받지 못해 지난 시간표를 그대로 올려요"
+            cp prev.json _site/timetable.json
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
