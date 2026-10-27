@@ -54,10 +54,27 @@ jobs:
             echo "::warning::컴시간알리미에서 받지 못해 지난 시간표를 그대로 올려요"
             cp prev.json _site/timetable.json
           fi
-      # needs Settings → Pages → Source: GitHub Actions (the workflow token cannot switch Pages on)
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # Pages must be switched on by hand: Settings → Pages → Source: GitHub Actions (the workflow token cannot).
+      # Until then the run ends here without failing.
+      - id: check
+        name: Is GitHub Pages on?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          type=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" | jq -r '.build_type // empty' || true)
+          if [ "$type" = workflow ]; then
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages가 아직 꺼져 있어요(${type:-없음}). Settings → Pages → Source를 GitHub Actions로 바꾸면 다음 실행부터 앱이 올라가요."
+          fi
+      - if: steps.check.outputs.on == 'true'
+        uses: actions/configure-pages@v5
+      - if: steps.check.outputs.on == 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-      - id: deployment
+      - if: steps.check.outputs.on == 'true'
+        id: deployment
         uses: actions/deploy-pages@v4

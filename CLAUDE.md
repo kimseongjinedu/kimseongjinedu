@@ -1,9 +1,10 @@
 # SchoolMate AI — Claude Code 인수인계
 
-창원대산고등학교 학생용 일정·시간표 웹앱이다. claude.ai 아티팩트로 만들어졌고, 코드는 HTML·CSS·JS가 한 파일에 들어 있다(`schoolmate-ai.html`, 약 5,300줄). 사용자는 한국어를 쓰며 주로 갤럭시 탭 크롬에서 확인한다. 답은 한국어로 짧게 한다.
+창원대산고등학교 학생용 일정·시간표 웹앱이다. claude.ai 아티팩트로 만들어졌고, 코드는 HTML·CSS·JS가 한 파일에 들어 있다(`app/schoolmate-ai.html`, 약 5,600줄). 같은 파일로 설치형 앱(GitHub Pages)도 만든다(9번). 사용자는 한국어를 쓰며 주로 갤럭시 탭 크롬에서 확인한다. 답은 한국어로 짧게 한다.
 
-- 아티팩트: https://claude.ai/artifact/HkDoYdytpVRMNsJVGCA59L (링크가 있으면 누구나 볼 수 있음). 페이지 소스는 이 저장소에 없다. 고치려면 Artifact `read`로 받아서 같은 URL로 다시 올린다.
-- 이 저장소에는 컴시간 동기화 스크립트(`scripts/`)만 있다. 8번 항목 참고.
+- 아티팩트: https://claude.ai/artifact/HkDoYdytpVRMNsJVGCA59L (링크가 있으면 누구나 볼 수 있음). 페이지 소스는 `app/schoolmate-ai.html`이다. 고친 뒤 같은 URL로 다시 올리고(먼저 Artifact `read`로 다른 사람이 바꾼 것이 없는지 본다), 이 파일도 커밋한다. 커밋하면 앱도 다시 배포된다.
+- 앱: https://kimseongjinedu.github.io/kimseongjinedu/ (9번).
+- `scripts/`: 컴시간 동기화(8번), 앱 빌드(9번).
 
 ## 1. 가장 먼저 알아야 할 것: 실행 환경
 
@@ -16,7 +17,7 @@
 | `assets` | 첨부 파일. `/_blob/<id>`로 제공 |
 | `permissions`, `user`, `downloads` | AI 허용 상태, 사용자 id, 파일 내려받기 |
 
-claude.ai 밖(로컬 파일, 다른 호스팅)에서는 이 API가 없다. 그래서 자동으로 localStorage에 저장하고, AI 없는 "기본 모드"(규칙 기반)로 돈다.
+claude.ai 밖(로컬 파일, 다른 호스팅, 9번의 앱)에서는 이 API가 없다. 그래서 자동으로 localStorage에 저장하고, AI 없는 "기본 모드"(규칙 기반)로 돈다.
 
 자체 호스팅에서 AI를 쓰려면 `ai.fn`을 Anthropic Messages API 호출로 바꿔야 한다. API 키는 브라우저에 두지 말고 서버 프록시를 둔다. 호출 비용이 든다. 첨부 파일과 db도 대체 저장소가 필요하다.
 
@@ -143,4 +144,15 @@ localStorage 키: `schoolmate-ai:schedules:v1`, `:timetable:v1`, `:supplies:v1`,
 - 문서 형식(`school/timetable`): `{ v:1, checkedAt, sourceUpdated, classes:{1:7,2:7,3:7}, times, base:{from, g}, weeks:[{start, g, changed}] }`. `g[학년]`은 문자열 40개(`요일*8 + 교시`, 월=0), 각 문자열은 `과목 교사|…`(1반부터). `changed`는 `'학년-반-요일(월=1)-교시(1부터)'`. 지난 주는 최근 12주까지 남긴다.
 - db 규칙: `{ path: 'school', read: 'view', write: 'admin' }`. 아티팩트를 다시 올릴 때 `capabilities`를 넘기면 이 규칙을 꼭 다시 적는다(빠뜨리면 사라진다).
 - 페이지 쪽: `initLive()`가 `school/timetable`을 구독한다. `readLive`/`setLive`가 검사·적용하고, `gradeTT(g, k)`는 그 주 자료가 있으면 그 주 것, 없으면 `base`, 그것도 없으면 `G*_TT`를 쓴다. `classRows(n, k)`는 날짜 `k`의 주에 맞춘다. 바뀐 수업은 `isChangedClass`로 ‘변경’ 표시, `renderTTSrc()`가 "마지막 확인" 시각을 보여 준다. `lastSyncSlot()`으로 가장 최근 예정 시각을 구해, 그 뒤 20분이 지났는데 자료가 그보다 오래됐으면 빨간색 "확인이 늦어지고 있어요"를 띄운다. 반 고르기 목록은 `buildClassSel()`이 만든다(`CLASS_LIMIT = 7`).
-- GitHub 푸시가 막혀 있다(Claude GitHub 앱에 이 저장소 권한 없음). 커밋이 세션 안에만 남을 수 있으니 권한을 먼저 확인한다.
+- 9번의 앱은 이 db를 못 읽어서, GitHub Actions가 같은 시각에 같은 스크립트를 돌려 `timetable.json`으로 올린다. 루틴(아티팩트용)과 Actions(앱용)는 따로 돈다.
+- GitHub 푸시: 2026-10-18 한때 막혔다가 지금은 된다(기본 브랜치가 `claude/hourly-class-check-link-g51x4a`).
+
+## 9. 설치형 앱 (GitHub Pages, 2026-10-27 추가)
+사용자 요청("앱으로 만들어줘"). claude.ai 아티팩트는 claude.ai 안의 iframe으로만 열리고(`frame-ancestors 'self'`, 웹 앱 매니페스트 없음) 설치할 수 없어서, 같은 페이지를 GitHub Pages에 PWA로 올린다. 크롬(안드로이드)에서 설치하면 WebAPK가 되어 앱 서랍·홈 화면에 아이콘이 생긴다.
+
+- 주소: https://kimseongjinedu.github.io/kimseongjinedu/ . 저장소 설정 Settings → Pages → Source가 **GitHub Actions**여야 한다(워크플로 토큰으로는 켤 수 없다. 사용자가 켬).
+- 파일: `app/schoolmate-ai.html`(페이지, 아티팩트와 같음), `app/manifest.webmanifest`, `app/sw.js`(`__VERSION__`을 빌드가 채움), `app/icons/`(학교 마크를 `app/icons/make-icons.cjs`로 크로미움에서 그림). `scripts/build-app.mjs --out _site`가 `<title>` 뒤에 `<meta name="schoolmate-app">`, 매니페스트, 아이콘 태그를 넣어 `index.html`을 만든다. 테스트 `scripts/build-app.test.mjs`.
+- `.github/workflows/app.yml`: `app/`·`scripts/`·워크플로를 푸시할 때, 루틴과 같은 시각(평일 8:15, 9:05~12:05, 13:55~15:55, 일 19:51, cron은 UTC), 수동 실행 때 돈다. 테스트 → 빌드 → 지난 `timetable.json`을 받아 `comcigan-sync.mjs --prev`로 새로 받기(실패하면 지난 것을 그대로) → Pages가 켜져 있으면(API `build_type == workflow`) 배포, 꺼져 있으면 알림만 남기고 성공으로 끝낸다. 커밋은 만들지 않는다. GitHub 예약 실행은 늦게 시작할 수 있고, 공개 저장소에서 60일 동안 커밋이 없으면 예약이 꺼진다.
+- 페이지의 앱 모드(`APP_BUILD` = meta 있음 + `window.claude` 없음): `initLiveFile()`이 `timetable.json`을 열 때·화면에 돌아올 때(1분 뒤부터)·10분마다 읽어 `applyLiveDoc()`으로 적용. 서비스 워커 등록(https나 localhost), "확인이 늦어지고 있어요" 여유 60분(아티팩트 20분). AI·계정 저장·첨부 파일은 없다(기본 모드, 이 기기 localStorage).
+- 머리의 휴대폰 아이콘(`#appBtn`) → "앱 설치와 백업" 창. 앱: `beforeinstallprompt`가 오면 [앱 설치] 버튼, 아니면 크롬 메뉴 안내, 원래 페이지 링크. 아티팩트: 앱 주소. 둘 다 [백업 파일 저장](아티팩트는 `downloads` 능력, 앱은 a[download]) / [백업 불러오기](파일 선택). 백업 형식 `{ app:'schoolmate-ai', v:1, exportedAt, items, blocks, classNo, grade, supplies }`. 불러오기는 합친다(같은 id는 백업 것, 같은 계획·같은 자리 블록은 하나만, 반·학년은 백업 것, 첨부 파일 저장소가 없으면 files 비움). `commit`을 거쳐 되돌리기 된다.
+- 시험: 빌드한 폴더를 `python3 -m http.server`로 열고 Playwright로 설치 가능(`Page.getInstallabilityErrors`), 서비스 워커, 오프라인 다시 열기, `timetable.json` 적용, 백업 왕복을 확인했다.
